@@ -16,6 +16,9 @@ bcp_excel export <db..table> into <excel-filename> -S server -U user -P password
 -T table
 -D database
 
+[other options import]
+--sheet index (counting from 1) 
+
 [other options export]
 -Q "query-text"
 ```
