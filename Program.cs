@@ -20,12 +20,12 @@ namespace AlarmPeople.Bcp;
 
 class Program
 {
-const string ProgramHelpText = @"
+    const string ProgramHelpText = @"
 bcp_excel 0.2.0.0
 Copyright (c) 2023 AlarmPeople A/S
 USAGE:
 Basic export:
-  bcp_excel export mydb..mytbl into myXls.xlsx -U sbn0 -S SBN1 -P pw123
+  bcp_excel export mydb..mytbl into my_excel.xlsx -U sa -S MSSQL1 -P pw123
 
   -S, --server                   SQL Server
   -U, --user                     SQL user login name
@@ -35,9 +35,14 @@ Basic export:
   Database and Table (pos. 0)    [database]..[tablename]
   Action (pos. 1)                into
   Excel file (pos. 2)            Excel filename
-  
+
+  [tablename] may be prefixed to allow custom exports
+    if [tablename] is prefixed with 'SQL:', the query will be executed and the result exported
+    if [tablename] is prefixed with 'FILE:', the content of the file be executed and the result exported
+
+ 
 Basic import:
-  bcp_import import myXls.xlsx into mydb..mytbl
+  bcp_excel import my_excel.xlsx into mydb..mytbl -U sa -S MSSQL1 -P pw123
 
   --nocreate                     Don't create table
   --keep                         Keep existing data in table
@@ -56,9 +61,9 @@ Basic import:
   Database and Table (pos. 2)    [database]..[tablename]
 
 -------Setting Format----------
--fi,i,i    -  means 3 integer columns
--fs50,u20  -  means 1 string 50 varchar column, 1 unicode 20 nvarchar
--fi,s,u30  -  means 1 int, 1 string 512 varchar and 1 unicode 30 nvarchar
+-f i,i,i    -  means 3 integer columns
+-f s50,u20  -  means 1 string 50 varchar column, 1 unicode 20 nvarchar
+-f i,s,u30  -  means 1 int, 1 string 512 varchar and 1 unicode 30 nvarchar
 ";
     // run as 
     // dotnet run -- sbnwork..test in test.xlsx -S localhost/sbnms1 -U sa -P sbntests
@@ -193,7 +198,7 @@ Basic import:
             Log.Error(msg);
             return 1;
         }
-        var queryText = $"select * from [{opt.Tablename}]";
+        var queryText = QueryTextFromTablename(opt.Tablename!);
         var sw = new Stopwatch();
         sw.Start();
 
@@ -224,6 +229,26 @@ Basic import:
 
         Log.Information("DONE in {x} ms", sw.ElapsedMilliseconds);
         return 0;
+    }
+
+    static string QueryTextFromTablename(string tablename)
+    {
+        // if tablename starts with FILE: then it is a file and function should return content of file
+        // if tablename starts with SQL: then it is a sql statement and function should return sql statement
+        // otherwise it is a table name and function should return select * from tablename
+        if (tablename.StartsWith("FILE:"))
+        {
+            var filename = tablename.Substring(5);
+            if (!File.Exists(filename))
+                throw new Exception($"File: {filename} does not exist");
+            return File.ReadAllText(filename);
+        }
+        if (tablename.StartsWith("SQL:"))
+        {
+            var sql = tablename.Substring(4);
+            return sql;
+        }
+        return $"select * from [{tablename}]";
     }
 
     static (bool, string) ValidateBaseOptions(BaseOptions opts)

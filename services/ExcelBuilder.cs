@@ -74,6 +74,9 @@ public class ExcelBuilder: IDisposable
             {
                 File.Delete(_options.Filename);
             }
+            // if _options.Filename does not have an extension, add .xlsx
+            if (Path.GetExtension(_options.Filename) == "")
+                _options.Filename += ".xlsx";
             using var strm = new FileStream(_options.Filename, FileMode.CreateNew );
             _book.Write(strm, false);
         }
