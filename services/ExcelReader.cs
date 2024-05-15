@@ -1,7 +1,9 @@
 using System.Data;
 using System.Text.Json;
+using NPOI.SS.Formula.Functions;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
+using Serilog;
 
 namespace AlarmPeople.Bcp;
 
@@ -29,12 +31,15 @@ public class ExcelReader : IDisposable
         var sheet = book.GetSheetAt(sheetNo);
         var fmts = ParseFormatOptions.Parse(fmt);
         // search for _DEF column
+        Serilog.Log.Information("Get BcpController for sheet {s} with fmt {f}", sheetNo, fmt);
         int ctrl_col = FindCellInRow(sheet, 0, "_CONTROL");
+        Serilog.Log.Information("Control row: {f}", ctrl_col);
         if (ctrl_col<0)
-            return new BcpController(sheet, -1, -1, -1, fmts);
+            return new BcpController(sheet, -1, -1, -1, fmts, _options.Default_DbDataType);
         int nm_row_ix = FindCellInCol(sheet, ctrl_col, "COLNAME");
         int def_row_ix = FindCellInCol(sheet, ctrl_col, "DEF");
-        return new BcpController(sheet, ctrl_col, nm_row_ix, def_row_ix, fmts);
+        Serilog.Log.Information("Name row: {n}, Definitions: {d}", nm_row_ix, def_row_ix);
+        return new BcpController(sheet, ctrl_col, nm_row_ix, def_row_ix, fmts, _options.Default_DbDataType);
     }
 
 

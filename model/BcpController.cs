@@ -7,13 +7,14 @@ namespace AlarmPeople.Bcp;
 public class BcpController
 {
 
-    public BcpController(ISheet sheet, int controlCol, int nameRow, int definitionRow, List<(string, int)> fmts)
+    public BcpController(ISheet sheet, int controlCol, int nameRow, int definitionRow, List<(string, int)> fmts, string defaultDbDataType)
     {
         _sheet = sheet;
         ControlCol = controlCol;
         NameRow = nameRow < 0 ? 0 : nameRow;
         DefinitionRow = definitionRow;
         _fmts = fmts;
+        _defaultDbDataType = defaultDbDataType;
         Fields = GetFields().ToList();
     }
 
@@ -38,6 +39,7 @@ public class BcpController
     public int DefinitionRow { get; set; }
     public List<Field> Fields { get; }
     private List<(string, int)> _fmts;
+    private String _defaultDbDataType;
 
     public IEnumerable<string> SqlDef()
     {
@@ -64,6 +66,7 @@ public class BcpController
 
     private IEnumerable<Field> GetFields()
     {
+        Log.Debug("Getting fields");
         var nm_row = _sheet.GetRow(NameRow);
         var maxIx = nm_row.LastCellNum;
         IRow? def_row = DefinitionRow < 0 ? null : _sheet.GetRow(DefinitionRow);
@@ -76,13 +79,18 @@ public class BcpController
                 continue;
             var fmt = _fmts.Count > i ? _fmts[i] : empty;
             var nm = nm_row.GetCell(i)?.ToString()?.Trim();
-            var def = def_row?.GetCell(i)?.ToString()?.Trim() ?? FmtToColDef(fmt) ?? ImportOptions.Default_DbDataType;
-            Console.WriteLine($"{nm} : {def}");
+            var def = def_row?.GetCell(i)?.ToString()?.Trim() ?? FmtToColDef(fmt) ?? _defaultDbDataType;
 
             if (!string.IsNullOrEmpty(nm))
             {
-                yield return Field.MakeField(i, sqlColIx, nm, def);
+                var f = Field.MakeField(i, sqlColIx, nm, def);
                 sqlColIx++;
+                Log.Debug($"[{sqlColIx,3}] [{i+1,3}] {nm,-18} {f.Definition()}");
+                yield return f;
+            }
+            else
+            {
+                Log.Debug($"[   ] [{i+1,3}] <Empty>");
             }
         }
     }
@@ -96,12 +104,16 @@ public class BcpController
         }
         return result;
     }
-    public IEnumerable<DataTable> GetData(int batchSize)
+    public IEnumerable<DataTable> GetData(int batchSize, int firstRow = -1, int lastRow = -1)
     {
-        var firstRow = 1 + (NameRow > DefinitionRow ? NameRow : DefinitionRow);
+        if (firstRow <= 0)
+            firstRow = 1 + (NameRow > DefinitionRow ? NameRow : DefinitionRow);
+        if (lastRow <= 0 || lastRow > _sheet.LastRowNum)
+            lastRow = _sheet.LastRowNum + 1;
+        // var firstRow = 1 + (NameRow > DefinitionRow ? NameRow : DefinitionRow);
         DataTable result = GetDataTable();
         int rows_left = batchSize;
-        for (int i = firstRow; i <= _sheet.LastRowNum; i++)
+        for (int i = firstRow; i < lastRow; i++)
         {
             // Log.Information("Getting data from row {r}", i);
             DataRow dataRow = result.NewRow();

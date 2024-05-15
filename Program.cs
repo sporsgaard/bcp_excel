@@ -21,15 +21,17 @@ namespace AlarmPeople.Bcp;
 class Program
 {
     const string ProgramHelpText = @"
-bcp_excel 0.2.0.0
-Copyright (c) 2023 AlarmPeople A/S
+bcp_excel 0.4.0.0
+Copyright (c) 2023-2024 AlarmPeople A/S
 USAGE:
 Basic export:
   bcp_excel export mydb..mytbl into my_excel.xlsx -U sa -S MSSQL1 -P pw123
+  bcp_excel export mydb..mytbl into my_excel.xlsx -U sa -S MSSQL1 -P pw123 --force true
 
   -S, --server                   SQL Server
   -U, --user                     SQL user login name
   -P, --password                 SQL user login password
+  --force [false|true]           Overwrite existing file (default is false)
   --help                         Display this help screen.
   --version                      Display version information.
   Database and Table (pos. 0)    [database]..[tablename]
@@ -43,14 +45,18 @@ Basic export:
  
 Basic import:
   bcp_excel import my_excel.xlsx into mydb..mytbl -U sa -S MSSQL1 -P pw123
+  bcp_excel import my_excel.xlsx into mydb..mytbl -U sa -S MSSQL1 -P pw123 --create true
+  bcp_excel import my_excel.xlsx into mydb..mytbl -U sa -S MSSQL1 -P pw123 --create false --truncate true
 
-  --nocreate                     Don't create table
-  --keep                         Keep existing data in table
+  --forcecreate [false|true]     Create table. Default is false.
+  --trucate [false|true]         Delete (truncate) existing data in table. Default is false.
   -f, --format                   Column definitions. Format: [datatype]<size>,[datatype]<size> ...
   -F, --firstrow                 First row of import - counting from line 1
   -L, --lastrow                  Last row of import - counting from line 1
+  -E, --errors                   Number of import errors to allow before stopping
   -b, --batchsize                Number of rows to commit in a batch
-  --sheet                        Sheet number in excel. First sheet has number 1
+  --colwidth [512]               Default varchar column size (defaults to 512)
+  --sheet [1]                    Sheet number in excel. First sheet has number 1
   -S, --server                   SQL Server
   -U, --user                     SQL user login name
   -P, --password                 SQL user login password
@@ -64,15 +70,26 @@ Basic import:
 -f i,i,i    -  means 3 integer columns
 -f s50,u20  -  means 1 string 50 varchar column, 1 unicode 20 nvarchar
 -f i,s,u30  -  means 1 int, 1 string 512 varchar and 1 unicode 30 nvarchar
+
+-------Setting Log level ----------
+Use one of the following options to set log level (--warn is default):
+    --debug
+    --verbose
+    --info
+    --warn
+    --error
+    --fatal
 ";
     // run as 
     // dotnet run -- sbnwork..test in test.xlsx -S localhost/sbnms1 -U sa -P sbntests
     static int Main(string[] args)
     {
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug() // Change to .MinimumLevel.Verbose() if more info is needed
-            .WriteTo.Console()
-            .CreateLogger();
+        args = ScanForLogLevelAndSetLogger(args);
+        // Log.Logger = new LoggerConfiguration()
+        //     // .MinimumLevel.Verbose() // Change to .MinimumLevel.Debug() if less info is needed
+        //     .MinimumLevel.Debug() // Change to .MinimumLevel.Verbose() if more info is needed
+        //     .WriteTo.Console()
+        //     .CreateLogger();
         // return
         //     Parser.Default
         //     .ParseArguments<ImportOptions, ExportOptions>(args)
@@ -90,84 +107,106 @@ Basic import:
 
     }
 
+    static string[] ScanForLogLevelAndSetLogger(string[] args)
+    {
+        string[] logLevels = { "--debug", "--verbose", "--info", "--warn", "--error", "--fatal" };
+        int logLevelIx = -1;
+        var newArgs = new List<string>();
+        foreach (var arg in args)
+        {
+            var ix = Array.FindIndex(logLevels, t => t.Equals(arg, StringComparison.InvariantCultureIgnoreCase));
+            if (ix >= 0)
+            {
+                logLevelIx = ix;
+                continue;
+            }
+            newArgs.Add(arg);
+        }
+
+        switch (logLevelIx)
+        {
+            case 0:
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Debug()
+                    .WriteTo.Console()
+                    .CreateLogger();
+                break;
+            case 1:
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Verbose()
+                    .WriteTo.Console()
+                    .CreateLogger();
+                break;
+            case 2:
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Information()
+                    .WriteTo.Console()
+                    .CreateLogger();
+                break;
+            case 3:
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Warning()
+                    .WriteTo.Console()
+                    .CreateLogger();
+                break;
+            case 4:
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Error()
+                    .WriteTo.Console()
+                    .CreateLogger();
+                break;
+            case 5:
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Fatal()
+                    .WriteTo.Console()
+                    .CreateLogger();
+                break;
+            default:
+                Log.Logger = new LoggerConfiguration()
+                    .MinimumLevel.Warning()
+                    .WriteTo.Console()
+                    .CreateLogger();
+                break;
+        }
+        return newArgs.ToArray();
+    }
+
     static int DisplayHelp(ParserResult<object> result, IEnumerable<Error> errs)
     {
-        // HelpText helpText;
-        // if (errs.IsVersion())  //check if error is version request
-        //     helpText = HelpText.AutoBuild(result);
-        // else
-        // {
-        //     helpText = HelpText.AutoBuild(result, h =>
-        //     {
-        //         //configure help
-        //         h.AdditionalNewLineAfterOption = false;
-        //         h.Heading = "bcp_excel 0.2.0.0"; //change header
-        //         h.Copyright = "Copyright (c) 2023 AlarmPeople A/S"; //change copyright text
-        //         h.AddPostOptionsLine(PostOptionsHelpText());
-        //         return h; //HelpText.DefaultParsingErrorsHandler(result, h);
-        //     }, e => e);
-        // }
         Console.WriteLine(ProgramHelpText);
         return 1;
     }
 
-    // static void PrintHelp(ParserResult<ImportOptions> parserResult)
-    // {
-    //     Console.WriteLine("SPORSGAARD!!!2");
-    //     var helpText = GetHelp<ImportOptions>(parserResult);
-    //     Console.WriteLine(helpText);
-    // }
-
-    // static string PostOptionsHelpText()
-    // {
-    //     var header = "-------Setting Format----------";
-
-    //     return $"{header}\n" + 
-    //             "-fiii    -  means 3 integer columns\n" +
-    //             "-fs50u20 -  means 1 string 50 char column, 1 unicode 20 char\n" +
-    //             "-fisu30  -  means 1 int, 1 string 512 char and 1 unicode 30 char";
-    // }
-
-    //Generate Help text
-    // static string GetHelp<T>(ParserResult<T> result)
-    // {
-    //     Console.WriteLine("SPORSGAARD!!!3");
-    //     // use default configuration
-    //     // you can customize HelpText and pass different configurations
-    //     //see wiki
-    //     // https://github.com/commandlineparser/commandline/wiki/How-To#q1
-    //     // https://github.com/commandlineparser/commandline/wiki/HelpText-Configuration
-    //     return HelpText
-    //         .AutoBuild(result,
-    //             h =>
-    //             {
-    //                 h.AddPostOptionsLine(PostOptionsHelpText());
-    //                 return h;
-    //             }, e => e);
-    // }
     static int RunImportAndReturnExitCode(ImportOptions opt)
     {
+        Log.Information("Args: {args}", opt.ToJsonString());
         var (ok, msg) = ValidateImportOptions(opt);
         if (!ok)
         {
             Log.Error(msg);
             return 1;
         }
+
         var sw = new Stopwatch();
         sw.Start();
         using var excel = new ExcelReader(opt);
 
         var sheet_no = opt.SheetNo ?? 1;
+        // fmt contains a string with column definitions
+        // it may look like "i,i,i" or "s50,u20" or "i,s,u30"
         var fmt = opt.Format ?? "";
         var ctrl = excel.GetBcpController(sheet_no - 1, fmt);
         foreach (var r in ctrl.Fields)
         {
+            if (opt.ColWidth.HasValue)
+                r.DbSize = opt.ColWidth.Value;
             Log.Verbose("Got Field Ix: {ix}, Nm: {nm}, Def: {def}", r.ColIx, r.Name, r.Definition);
         }
 
+
         using var conn = new MssqlConnection(opt.Server!, opt.User!, opt.Password!, opt.Database!);
         conn.Open();
-        if (opt.CreateTable ?? ImportOptions.Default_CreateTable)
+        if (opt.ForceCreateTable ?? ImportOptions.Default_CreateTable)
         {
             conn.DropTable(opt.Tablename!);
             conn.CreateTable(opt.Tablename!, ctrl);
@@ -176,22 +215,46 @@ Basic import:
         if (opt.Truncate ?? ImportOptions.Default_Truncate)
             conn.TruncateTable(opt.Tablename!);
 
+        int goodRows = 0;
+        int badRows = 0;
+        int errCnt = 0;
         using (var bulkInsert = new SqlBulkCopy(conn.DSN))
         {
+            var maxErrors = opt.ImportErrors;
             bulkInsert.DestinationTableName = opt.Tablename;
             var bchSize = opt.BatchSize ?? ImportOptions.Default_BatchSize;
-            foreach (var tbl in ctrl.GetData(batchSize: bchSize))
+            foreach (var tbl in ctrl.GetData(batchSize: bchSize, firstRow: opt.FirstRowNum, lastRow: opt.LastRowNum))
             {
-                bulkInsert.WriteToServer(tbl);
-                Log.Warning("Inserted {r} rows", tbl.Rows.Count);
+                try
+                {
+                    bulkInsert.WriteToServer(tbl);
+                    goodRows += tbl.Rows.Count;
+                    Log.Information("Inserted {r} rows", tbl.Rows.Count);
+                }
+                catch (SqlException ex)
+                {
+                    Log.Error("SQL Error: {msg}", ex.Message);
+                    errCnt++;
+                    badRows += tbl.Rows.Count;
+                    maxErrors--;
+                    if (maxErrors <= 0)
+                    {
+                        Log.Error("Too many errors. Aborting");
+                        break;
+                    }
+                }
             }
         }
-        Log.Information("DONE in {x} ms", sw.ElapsedMilliseconds);
+        Log.Information("Inserted {good} rows in {x} ms", goodRows, sw.ElapsedMilliseconds);
+        if (errCnt > 0)
+            Log.Error("Total {err} errors, affecting {rows} rows", errCnt, badRows);
         return 0;
     }
 
     static int RunExportAndReturnExitCode(ExportOptions opt)
     {
+        Log.Verbose("Args: {args}", opt.ToJsonString());
+
         var (ok, msg) = ValidateExportOptions(opt);
         if (!ok)
         {

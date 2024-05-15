@@ -8,14 +8,13 @@ namespace AlarmPeople.Bcp;
 public abstract class Field
 {
     public string Name { get; set; } = "";
-    public string Definition 
-        => DbDataType + (DbSize>0? $"({DbSize})" : "") + (DbNullable? " null" : " not null");
+    public abstract string Definition();
     public int ColIx { get; set; }
     public int SqlIx { get; set; } = 0;
-    public string SqlDef => $"[{Name}] {Definition}";
+    public string SqlDef => $"[{Name}] {Definition()}";
 
     public string DbDataType { get; set; } = "";
-    public int DbSize { get; set; } = -1;
+    public int DbSize { get; set; } = 0;
     public bool DbNullable { get; set; } = true;
 
     public DataColumn GetDataColumn()
@@ -54,7 +53,7 @@ public abstract class Field
     }
 
     private static Regex dataTypeRegEx = 
-        new Regex(@"^(?<type>\w+)\s*(\(\s*(?<size>\d+)\s*\))?\s*(?<not>not\s+)?(?<null>null)?", RegexOptions.IgnoreCase);
+        new Regex(@"^(?<type>[^\d\(]+)\s*(\(?\s*(?<size>\d+)\s*\)?)?\s*(?<not>not\s+)?(?<null>null)?", RegexOptions.IgnoreCase);
 
     private static Dictionary<string, Func<Field>> FieldTypesMap = new Dictionary<string, Func<Field>>
     {

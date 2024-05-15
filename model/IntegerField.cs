@@ -6,6 +6,8 @@ namespace AlarmPeople.Bcp;
 public class IntegerField: Field
 {
     static Type? dataType = System.Type.GetType("System.Int32");
+    public override string Definition()
+        => DbDataType + (DbNullable ? " null" : " not null");
 
     protected override Type? InternGetDataType() => dataType;
 
